@@ -1,0 +1,241 @@
+---
+output: word_document
+---
+# Scripts to analyze Goby vertebral morphology data
+Created by Kelly Diamond
+
+### Preprocessing steps and notes
+- fish standard length (length not including caudal fin) was measured in ImageJ
+- centrum length (cl) and intervertebral space (ivs) was mesured for the vertebrae at 25/50/75% of the vertebral length. Lengths are calculatedin the script from landmark points placed using 3D slicer
+- Measurments are size standardized by the standard length
+- all measurments recorded in mm
+
+```{r load libraries, include=FALSE}
+library(data.table)
+library(ggplot2)
+library(grid) # necessary for ggplot2
+library(gridExtra) #grid.arrange
+library(doBy)
+library(pracma) #for dot products
+library(reshape2)
+```
+
+### Import data
+The vert data table is for calculating distance measures and GobyData is the reorganized distances used in the analysis for this study. 
+```{r import data, include=FALSE}
+vert = data.table(read.table('slicer_output_22may19.txt',header=TRUE,sep='\t'))
+GobyData = read.csv('./slicer_distance_measures_1april21.csv', header = TRUE)
+GobyData$position = as.character(GobyData$position)
+GobyData$style = as.character(GobyData$style)
+```
+
+#Distances
+Calculate linear distances between points landmarked using 3D Slicer.
+```{r calc dist, include=FALSE}
+#function for calculating euclidian distances between 2 xyz pts
+euc.dist <- function(x1, x2, y1, y2, z1, z2 ) as.numeric(sqrt( (x2 - x1)^2 + (y2 - y1)^2 + (z2 - z1)^2 )) #calculates distance between 2 xyz points
+std.by.length <- function(x1,y1) as.numeric(x1/y1) #standardize a measure (x1) by standard length (y1)
+dist.output <- as.data.table(vert[,1:4])
+dist.output$std_length <- as.numeric(dist.output$std_length)
+
+#for loop iterates though each individual and does all the math to calculate measures involving distance
+for (i in 1:dim(vert) [1]) {
+
+  #centrum length in mm
+  dist.output$cl_25[i] <- euc.dist(vert$X25p_1x[i],vert$X25p_2x[i],vert$X25p_1y[i],vert$X25p_2y[i],vert$X25p_1z[i],vert$X25p_2z[i])
+  dist.output$cl_50[i] <- euc.dist(vert$X50p_1x[i],vert$X50p_2x[i],vert$X50p_1y[i],vert$X50p_2y[i],vert$X50p_1z[i],vert$X50p_2z[i])
+  dist.output$cl_75[i] <- euc.dist(vert$X75p_1x[i],vert$X75p_2x[i],vert$X75p_1y[i],vert$X75p_2y[i],vert$X75p_1z[i],vert$X75p_2z[i])
+  
+  #centrum length in body length (bl)
+  dist.output$cl_25_std[i] <- std.by.length(dist.output$cl_25[i],dist.output$std_length[i])
+  dist.output$cl_50_std[i] <- std.by.length(dist.output$cl_50[i],dist.output$std_length[i])
+  dist.output$cl_75_std[i] <- std.by.length(dist.output$cl_75[i],dist.output$std_length[i])
+
+  #minimum centrum width in mm
+  dist.output$can.d_25[i] <- euc.dist(vert$X25p_4x[i],vert$X25p_5x[i],vert$X25p_4y[i],vert$X25p_5y[i],vert$X25p_4z[i],vert$X25p_5z[i])
+  dist.output$can.d_50[i] <- euc.dist(vert$X50p_4x[i],vert$X50p_5x[i],vert$X50p_4y[i],vert$X50p_5y[i],vert$X50p_4z[i],vert$X50p_5z[i])
+  dist.output$can.d_75[i] <- euc.dist(vert$X75p_4x[i],vert$X75p_5x[i],vert$X75p_4y[i],vert$X75p_5y[i],vert$X75p_4z[i],vert$X75p_5z[i])
+  
+  #minimum centrum width in bl
+  dist.output$can.d_25_std[i] <- std.by.length(dist.output$can.d_25[i],dist.output$std_length[i])
+  dist.output$can.d_50_std[i] <- std.by.length(dist.output$can.d_50[i],dist.output$std_length[i])
+  dist.output$can.d_75_std[i] <- std.by.length(dist.output$can.d_75[i],dist.output$std_length[i])
+
+  #maximum centrum width in mm
+  dist.output$con.d_25[i] <- euc.dist(vert$X25p_2x[i],vert$X25p_3x[i],vert$X25p_2y[i],vert$X25p_3y[i],vert$X25p_2z[i],vert$X25p_3z[i])
+  dist.output$con.d_50[i] <- euc.dist(vert$X50p_2x[i],vert$X50p_3x[i],vert$X50p_2y[i],vert$X50p_3y[i],vert$X50p_2z[i],vert$X50p_3z[i])
+  dist.output$con.d_75[i] <- euc.dist(vert$X75p_2x[i],vert$X75p_3x[i],vert$X75p_2y[i],vert$X75p_3y[i],vert$X75p_2z[i],vert$X75p_3z[i])
+  
+  #maximum centrum width in bl
+  dist.output$con.d_25_std[i] <- std.by.length(dist.output$con.d_25[i],dist.output$std_length[i])
+  dist.output$con.d_50_std[i] <- std.by.length(dist.output$con.d_50[i],dist.output$std_length[i])
+  dist.output$con.d_75_std[i] <- std.by.length(dist.output$con.d_75[i],dist.output$std_length[i])
+  
+  #intervertebral space in mm
+  dist.output$ivs_25[i] <- euc.dist(vert$X25p_2x[i],vert$X25p_6x[i],vert$X25p_2y[i],vert$X25p_6y[i],vert$X25p_2z[i],vert$X25p_6z[i])
+  dist.output$ivs_50[i] <- euc.dist(vert$X50p_2x[i],vert$X50p_6x[i],vert$X50p_2y[i],vert$X50p_6y[i],vert$X50p_2z[i],vert$X50p_6z[i])
+  dist.output$ivs_75[i] <- euc.dist(vert$X75p_2x[i],vert$X75p_6x[i],vert$X75p_2y[i],vert$X75p_6y[i],vert$X75p_2z[i],vert$X75p_6z[i])
+  
+  #intervertebral sapce in bl
+  dist.output$ivs_25_std[i] <- std.by.length(dist.output$ivs_25[i],dist.output$std_length[i])
+  dist.output$ivs_50_std[i] <- std.by.length(dist.output$ivs_50[i],dist.output$std_length[i])
+  dist.output$ivs_75_std[i] <- std.by.length(dist.output$ivs_75[i],dist.output$std_length[i])
+  
+}
+
+```
+
+# Questions
+I took the table output in the above chunk and reorganized so that each measurment has it's own column with a new column noting the position along the vertebral column (25,50, or 75). To import this dataset run the Import Data chunk.
+
+### Does centrum length differ by species (no: F=1.057, p=0.39), along spinal column (yes:F=5.256, p=0.009), or among climbing styles (no: F=1.813, p=0.176)?
+```{r centrum length}
+#Standardized centrum lenght does not differ by species F=1.057, p=0.39
+cl_species = aov(cl_std ~ Species, data = GobyData)
+summary(cl_species)
+
+#Std CL does not differ by climbing style F=1.813, p=0.176
+cl_style = aov(cl_std ~ style, data = GobyData)
+summary(cl_style)
+
+#Std CL does differ by postion along the vertebral column F=5.256, p=0.009
+cl_pos = aov(cl_std ~ position, data = GobyData)
+summary(cl_pos)
+
+TukeyHSD(cl_pos) #posthoc for postion along vertebral column
+
+#Plot
+gg <- ggplot(data=GobyData, aes(x=position, y=cl_std)) +
+  geom_violin() +
+  geom_boxplot(width=0.2) +
+  ylab("Centrum length (body lengths)") +
+  xlab("Position along vertebral column (%)") +
+  theme_classic() +
+  theme(text=element_text(size=14),plot.title=element_text(hjust=0), legend.position = "none") 
+gg
+```
+
+### Does minimum centrum width differ by species (yes:F=3.597, p=0.0135), along spinal column (yes:F=6.115, p=0.00467), or among climbing styles (yes: F=3.6, p=0.0361)?
+```{r minimum centrum width}
+#Minimum centrum width does differ by species F=3.597, p=0.0135
+minCW_species = aov(can.d_std ~ Species, data = GobyData)
+summary(minCW_species)
+
+TukeyHSD(minCW_species) #posthoc
+
+#minCW does differ by climbing style F=3.6, p=0.0361
+minCW_style = aov(can.d_std ~ style, data = GobyData)
+summary(minCW_style)
+
+TukeyHSD(minCW_style) #posthoc
+
+#minCW does differ by postion along the vertebral column F=6.115, p=0.00467
+minCW_pos = aov(can.d_std ~ position, data = GobyData)
+summary(minCW_pos)
+
+TukeyHSD(minCW_pos) #posthoc
+
+#colors
+grey <- rgb(127, 127, 127, max = 255)
+blue <- rgb(91, 155, 213, max = 255)
+orange <- rgb(237, 125, 49, max = 255)
+c_sch <- c(grey, blue, orange)
+
+GobyData$position <- factor(GobyData$position, levels = c("25", "50", "75"), 
+                  labels = c("25%*", "50%", "75%"))
+
+#Plot
+gg <- ggplot(data=GobyData, aes(x=Species, y=can.d_std)) +
+  geom_violin(aes(fill=style)) + 
+  geom_boxplot(width = 0.1) +
+  #geom_point(position=pd,size=5) +
+  #geom_errorbar(aes(ymin= cent.min.w$average - cent.min.w$std.error, ymax = cent.min.w$average + cent.min.w$std.error), width=0.25, position = pd)+
+  ylab("Minimum centrum width (body lengths)") +
+  scale_x_discrete("Species", limits = c("Eleotris sandwicensis", "Stenogobius hawaiiensis", "Awaous stamineus",  "Lentipes concolor", "Sicyopterus stimpsoni"), 
+                   labels=expression(paste(italic("E.s.")), paste(italic("S.h.")), paste(italic("A.s.")), paste(italic(bold("L.c.*"))), paste(italic(bold("S.s.*")))))+
+  scale_fill_manual(values = c_sch, name= 'Climbing Style', breaks= c("Non-climbing", "Powerburst", "Inching"), labels=expression(paste("Non-climbing"), paste(bold("Powerburst*")), paste(bold("Inching*"))))+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), 
+    panel.background = element_blank(), axis.line = element_line(colour = "black"), legend.key = element_rect(fill = NA),    
+    plot.margin=unit(x=c(0.1,0.1,0.1,0.1),'cm'),text=element_text(size=14),plot.title=element_text(hjust=0), legend.position = "none") +
+  facet_wrap(.~position) + 
+  theme(strip.text.x = element_text(size=18, face="bold"))
+gg
+```
+
+
+### Does maximum centrum width differ by species (no:F=2.45, p=0.062), along spinal column (no:F=60.62, p=0.55), or among climbing styles (yes:F=6.115, p=0.00467)?
+```{r maximum centrum width}
+#Maximum centrum width does not differ by species F=2.45, p=0.062
+maxCW_species = aov(con.d_std ~ Species, data = GobyData)
+summary(maxCW_species)
+
+#maxCW does differ by climbing style F=3.27, p=0.048
+maxCW_style = aov(con.d_std ~ style, data = GobyData)
+summary(maxCW_style)
+
+TukeyHSD(maxCW_style) #posthoc
+
+#maxCW does not differ by postion along the vertebral column F=0.62, p=0.55
+maxCW_pos = aov(con.d_std ~ position, data = GobyData)
+summary(maxCW_pos)
+
+grey <- rgb(127, 127, 127, max = 255)
+blue <- rgb(91, 155, 213, max = 255)
+orange <- rgb(237, 125, 49, max = 255)
+c_sch <- c(grey, blue, orange)
+
+#Plot
+gg <- ggplot(data=GobyData, aes(x=style, y=can.d_std)) +
+  geom_violin(aes(fill=style)) +
+  geom_boxplot(width=0.2) +
+  ylab("Maximum centrum width (body lengths)") +
+  scale_x_discrete("Climbing Style", limits= c("Non-climbing", "Powerburst", "Inching"), labels=expression(paste("Non-climbing"), paste(bold("Powerburst*")), paste(bold("Inching*")))) +
+  scale_fill_manual(values = c_sch)+
+  theme_classic() +
+  theme(text=element_text(size=14),plot.title=element_text(hjust=0), legend.position = "none") 
+gg
+```
+
+### Does intervertebral space differ by species (yes: F=4.92, p=0.0025), along spinal column (no:F=1.1, p=0.34), or among climbing styles (yes:F=7.7, p=0.0014)?
+```{r intervertebral space}
+#Intervertebral space does differ by species F=4.92, p=0.0025
+ivs_species = aov(ivs_std ~ Species, data = GobyData)
+summary(ivs_species)
+
+TukeyHSD(ivs_species) #posthoc
+
+#ivs does differ by climbing style F=7.7, p=0.0014
+ivs_style = aov(ivs_std ~ style, data = GobyData)
+summary(ivs_style)
+
+TukeyHSD(ivs_style) #posthoc
+
+#ivs does not differ by postion along the vertebral column F=1.1, p=0.34
+ivs_pos = aov(ivs_std ~ position, data = GobyData)
+summary(ivs_pos)
+
+#import pooled data table for ivs
+pooled.ivs <- data.table(read.table('pooled indiv ivs.txt',header=TRUE,sep='\t'))
+pooled.ivs$per.length <- factor(pooled.ivs$per.length, levels = c("25", "50", "75"), 
+                  labels = c("25%", "50%", "75%"))
+
+#colors
+grey <- rgb(127, 127, 127, max = 255)
+blue <- rgb(91, 155, 213, max = 255)
+orange <- rgb(237, 125, 49, max = 255)
+c_sch <- c(grey, blue, orange)
+
+#Plot
+gg <- ggplot(data=GobyData, aes(x=Species, y=ivs_std)) +
+  geom_violin(aes(fill=style)) + 
+  geom_boxplot(width = 0.2) +
+  ylab("Intervertebral joint (body lengths)") +
+  scale_x_discrete("Species", limits = c("Eleotris sandwicensis", "Stenogobius hawaiiensis", "Awaous stamineus",  "Lentipes concolor", "Sicyopterus stimpsoni"), 
+                   labels=expression(paste(italic(bold("E.s.*"))), paste(italic(bold("S.h.*"))), paste(italic("A.s.")), paste(italic(bold("L.c.*"))), paste(italic(bold("S.s.**")))))+
+  scale_fill_manual(values = c_sch, name= 'Climbing Style', breaks= c("Non-climbing", "Powerburst", "Inching"), labels=expression(paste(bold("Non-climbing*")), paste("Powerburst"), paste(bold("Inching*"))))+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), 
+    panel.background = element_blank(), axis.line = element_line(colour = "black"), legend.key = element_rect(fill = NA),    
+    plot.margin=unit(x=c(0.1,0.1,0.1,0.1),'cm'),text=element_text(size=14),plot.title=element_text(hjust=0), legend.position = "none")
+gg
+```
+
